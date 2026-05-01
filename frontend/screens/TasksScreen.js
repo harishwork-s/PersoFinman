@@ -6,19 +6,23 @@ import ActionButton from "../components/ActionButton";
 import AppHeader from "../components/AppHeader";
 import FilterChips from "../components/FilterChips";
 import FormInput from "../components/FormInput";
+import SearchBar from "../components/SearchBar";
 import { COLORS, STORAGE_KEYS } from "../utils/constants";
+import { confirmDelete } from "../utils/confirmDelete";
 import { getDateStatus, isValidDate, sortByDate } from "../utils/dateUtils";
 import { formatCurrency, createId } from "../utils/format";
 import { cancelItemNotifications, scheduleItemNotifications } from "../utils/notifications";
+import { matchesSearch } from "../utils/search";
 import { loadCollection, saveCollection } from "../utils/storage";
 
 const blankForm = { name: "", amount: "", dueDate: "" };
 
-export default function TasksScreen({ t, language, setLanguage }) {
+export default function TasksScreen({ t, language, setLanguage, onProfilePress }) {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(blankForm);
   const [editId, setEditId] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -76,13 +80,7 @@ export default function TasksScreen({ t, language, setLanguage }) {
       if (editId) {
         const oldItem = items.find((item) => item.id === editId);
         await cancelItemNotifications(oldItem?.notificationIds);
-        const updated = {
-          ...oldItem,
-          name: form.name.trim(),
-          amount: Number(form.amount),
-          dueDate: form.dueDate,
-          updatedAt: now,
-        };
+        const updated = { ...oldItem, name: form.name.trim(), amount: Number(form.amount), dueDate: form.dueDate, updatedAt: now };
         updated.notificationIds = updated.done ? [] : await safeSchedule("task", updated);
         await saveItems(items.map((item) => (item.id === editId ? updated : item)));
       } else {
@@ -109,11 +107,7 @@ export default function TasksScreen({ t, language, setLanguage }) {
 
   function startEdit(item) {
     setEditId(item.id);
-    setForm({
-      name: item.name,
-      amount: String(item.amount),
-      dueDate: item.dueDate,
-    });
+    setForm({ name: item.name, amount: String(item.amount), dueDate: item.dueDate });
   }
 
   function clearForm() {
@@ -126,11 +120,7 @@ export default function TasksScreen({ t, language, setLanguage }) {
     setError("");
     try {
       await cancelItemNotifications(item.notificationIds);
-      const updated = {
-        ...item,
-        done: !item.done,
-        updatedAt: new Date().toISOString(),
-      };
+      const updated = { ...item, done: !item.done, updatedAt: new Date().toISOString() };
       updated.notificationIds = updated.done ? [] : await safeSchedule("task", updated);
       await saveItems(items.map((current) => (current.id === item.id ? updated : current)));
     } catch (err) {
@@ -170,7 +160,7 @@ export default function TasksScreen({ t, language, setLanguage }) {
     { key: "soon", label: t.dueSoonFilter },
     { key: "overdue", label: t.overdueFilter },
   ];
-  const visibleItems = items.filter((item) => {
+  const filteredItems = items.filter((item) => {
     const status = getDateStatus(item.dueDate, item.done, t, t.done);
     if (filter === "pending") return !item.done;
     if (filter === "done") return item.done;
@@ -178,11 +168,14 @@ export default function TasksScreen({ t, language, setLanguage }) {
     if (filter === "overdue") return !item.done && status.kind === "overdue";
     return true;
   });
+  const visibleItems = filteredItems.filter((item) => matchesSearch(item, searchQuery));
+  const emptyMessage = searchQuery.trim() ? t.noMatches : t.emptyTasks;
 
   return (
     <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <AppHeader title={t.tasks} t={t} language={language} setLanguage={setLanguage} />
+      <AppHeader title={t.tasks} t={t} language={language} setLanguage={setLanguage} onProfilePress={onProfilePress} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder={t.searchTasks} />
         <View style={styles.form}>
           <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
           <FormInput label={t.amount} value={form.amount} keyboardType="numeric" onChangeText={(value) => updateForm("amount", value)} />
@@ -190,24 +183,21 @@ export default function TasksScreen({ t, language, setLanguage }) {
           <ActionButton label={editId ? t.update : t.add} icon={editId ? "save-outline" : "add-outline"} onPress={addOrUpdateItem} disabled={loading} />
           {editId ? <ActionButton label={t.cancel} icon="close-outline" variant="light" onPress={clearForm} /> : null}
         </View>
-
         <FilterChips filters={filters} activeFilter={filter} onChange={setFilter} />
-
         {loading ? <Text style={styles.info}>{t.loading}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {!loading && !visibleItems.length ? <Text style={styles.info}>{t.emptyTasks}</Text> : null}
-
+        {!loading && !visibleItems.length ? <Text style={styles.info}>{emptyMessage}</Text> : null}
         {visibleItems.map((item) => {
           const status = getDateStatus(item.dueDate, item.done, t, t.done);
           return (
             <View key={item.id} style={[styles.card, ["soon", "today"].includes(status.kind) && styles.alertCard, status.kind === "overdue" && styles.overdueCard]}>
               <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardLine}>{formatCurrency(item.amount)} · {item.dueDate}</Text>
+              <Text style={styles.cardLine}>{formatCurrency(item.amount)} - {item.dueDate}</Text>
               <Text style={[styles.status, status.kind === "overdue" && styles.dangerText]}>{status.text}</Text>
               <View style={styles.actions}>
                 <ActionButton label={t.edit} icon="create-outline" variant="light" onPress={() => startEdit(item)} />
                 <ActionButton label={item.done ? t.markPending : t.markDone} icon="checkmark-outline" variant="success" onPress={() => toggleDone(item)} />
-                <ActionButton label={t.delete} icon="trash-outline" variant="danger" onPress={() => deleteItem(item)} />
+                <ActionButton label={t.delete} icon="trash-outline" variant="danger" onPress={() => confirmDelete(t, () => deleteItem(item))} />
               </View>
             </View>
           );

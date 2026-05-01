@@ -19,21 +19,25 @@ import ActionButton from "../components/ActionButton";
 import AppHeader from "../components/AppHeader";
 import FilterChips from "../components/FilterChips";
 import FormInput from "../components/FormInput";
+import SearchBar from "../components/SearchBar";
 import { COLORS, STORAGE_KEYS } from "../utils/constants";
+import { confirmDelete } from "../utils/confirmDelete";
 import { calculateExpiryDate, getWarrantyStatus, isValidDate, sortByDate } from "../utils/dateUtils";
 import { createId } from "../utils/format";
 import { persistInvoice, removeInvoice } from "../utils/invoiceStorage";
 import { cancelItemNotifications, scheduleItemNotifications } from "../utils/notifications";
+import { matchesSearch } from "../utils/search";
 import { loadCollection, saveCollection } from "../utils/storage";
 
 const blankForm = { name: "", purchaseDate: "", warrantyMonths: "" };
 
-export default function WarrantyScreen({ t, language, setLanguage }) {
+export default function WarrantyScreen({ t, language, setLanguage, onProfilePress }) {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(blankForm);
   const [editId, setEditId] = useState(null);
   const [invoiceAsset, setInvoiceAsset] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [previewUri, setPreviewUri] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -205,12 +209,14 @@ export default function WarrantyScreen({ t, language, setLanguage }) {
     if (filter === "soon") return ["today", "soon"].includes(status.kind);
     if (filter === "expired") return status.kind === "expired";
     return true;
-  });
+  }).filter((item) => matchesSearch(item, searchQuery));
+  const emptyMessage = searchQuery.trim() ? t.noMatches : t.emptyWarranty;
 
   return (
     <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <AppHeader title={t.warranty} t={t} language={language} setLanguage={setLanguage} />
+      <AppHeader title={t.warranty} t={t} language={language} setLanguage={setLanguage} onProfilePress={onProfilePress} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder={t.searchWarranty} />
         <View style={styles.form}>
           <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
           <FormInput label={`${t.purchaseDate} (YYYY-MM-DD)`} value={form.purchaseDate} onChangeText={(value) => updateForm("purchaseDate", value)} />
@@ -224,7 +230,7 @@ export default function WarrantyScreen({ t, language, setLanguage }) {
 
         {loading ? <Text style={styles.info}>{t.loading}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {!loading && !visibleItems.length ? <Text style={styles.info}>{t.emptyWarranty}</Text> : null}
+        {!loading && !visibleItems.length ? <Text style={styles.info}>{emptyMessage}</Text> : null}
 
         {visibleItems.map((item) => {
           const status = getWarrantyStatus(item, t);
@@ -251,7 +257,7 @@ export default function WarrantyScreen({ t, language, setLanguage }) {
               )}
               <View style={styles.actions}>
                 <ActionButton label={t.edit} icon="create-outline" variant="light" onPress={() => startEdit(item)} />
-                <ActionButton label={t.delete} icon="trash-outline" variant="danger" onPress={() => deleteItem(item)} />
+                <ActionButton label={t.delete} icon="trash-outline" variant="danger" onPress={() => confirmDelete(t, () => deleteItem(item))} />
               </View>
             </View>
           );

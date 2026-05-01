@@ -69,6 +69,23 @@ export function calculateExpiryDate(purchaseDate, warrantyMonths) {
   return toDateInput(expiry);
 }
 
+export function addMonthsToDate(dateValue, monthsToAdd) {
+  const parsed = parseLocalDate(dateValue);
+  if (!parsed) return dateValue;
+  const targetMonth = parsed.getMonth() + monthsToAdd;
+  const next = new Date(parsed.getFullYear(), targetMonth, 1);
+  const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+  next.setDate(Math.min(parsed.getDate(), lastDay));
+  return toDateInput(next);
+}
+
+export function getNextAutopayDate(dateValue, frequency) {
+  if (frequency === "Monthly") return addMonthsToDate(dateValue, 1);
+  if (frequency === "Quarterly") return addMonthsToDate(dateValue, 3);
+  if (frequency === "Yearly") return addMonthsToDate(dateValue, 12);
+  return dateValue;
+}
+
 export function getDateStatus(dateValue, isComplete, t, completeText) {
   if (isComplete) {
     return { text: completeText, kind: "complete", days: 0 };

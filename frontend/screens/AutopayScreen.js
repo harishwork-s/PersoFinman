@@ -6,19 +6,23 @@ import ActionButton from "../components/ActionButton";
 import AppHeader from "../components/AppHeader";
 import FilterChips from "../components/FilterChips";
 import FormInput from "../components/FormInput";
+import SearchBar from "../components/SearchBar";
 import { COLORS, FREQUENCIES, STORAGE_KEYS } from "../utils/constants";
-import { getDateStatus, isValidDate, sortByDate } from "../utils/dateUtils";
+import { confirmDelete } from "../utils/confirmDelete";
+import { getDateStatus, getNextAutopayDate, isValidDate, sortByDate } from "../utils/dateUtils";
 import { formatCurrency, createId } from "../utils/format";
 import { cancelItemNotifications, scheduleItemNotifications } from "../utils/notifications";
+import { matchesSearch } from "../utils/search";
 import { loadCollection, saveCollection } from "../utils/storage";
 
 const blankForm = { name: "", amount: "", date: "", paymentLink: "", frequency: "Monthly" };
 
-export default function AutopayScreen({ t, language, setLanguage }) {
+export default function AutopayScreen({ t, language, setLanguage, onProfilePress }) {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(blankForm);
   const [editId, setEditId] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -131,17 +135,25 @@ export default function AutopayScreen({ t, language, setLanguage }) {
     setForm(blankForm);
   }
 
-  async function togglePaid(item) {
+  async function handlePaid(item) {
     setLoading(true);
     setError("");
     try {
       await cancelItemNotifications(item.notificationIds);
-      const updated = {
-        ...item,
-        paid: !item.paid,
-        updatedAt: new Date().toISOString(),
-      };
-      updated.notificationIds = updated.paid ? [] : await safeSchedule("autopay", updated);
+      let updated;
+      if (item.frequency === "One-time") {
+        updated = { ...item, paid: !item.paid, updatedAt: new Date().toISOString() };
+        updated.notificationIds = updated.paid ? [] : await safeSchedule("autopay", updated);
+      } else {
+        updated = {
+          ...item,
+          date: getNextAutopayDate(item.date, item.frequency),
+          paid: false,
+          updatedAt: new Date().toISOString(),
+        };
+        updated.notificationIds = await safeSchedule("autopay", updated);
+        Alert.alert(t.nextCycleScheduled);
+      }
       await saveItems(items.map((current) => (current.id === item.id ? updated : current)));
     } catch (err) {
       setError(t.storageError);
@@ -180,7 +192,7 @@ export default function AutopayScreen({ t, language, setLanguage }) {
     { key: "soon", label: t.dueSoonFilter },
     { key: "overdue", label: t.overdueFilter },
   ];
-  const visibleItems = items.filter((item) => {
+  const filteredItems = items.filter((item) => {
     const status = getDateStatus(item.date, item.paid, t, t.paid);
     if (filter === "unpaid") return !item.paid;
     if (filter === "paid") return item.paid;
@@ -188,17 +200,19 @@ export default function AutopayScreen({ t, language, setLanguage }) {
     if (filter === "overdue") return !item.paid && status.kind === "overdue";
     return true;
   });
+  const visibleItems = filteredItems.filter((item) => matchesSearch(item, searchQuery));
+  const emptyMessage = searchQuery.trim() ? t.noMatches : t.emptyAutopay;
   const total = items.reduce((amount, item) => amount + Number(item.amount || 0), 0);
 
   return (
     <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <AppHeader title={t.autopay} t={t} language={language} setLanguage={setLanguage} />
+      <AppHeader title={t.autopay} t={t} language={language} setLanguage={setLanguage} onProfilePress={onProfilePress} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder={t.searchAutopay} />
         <View style={styles.totalBox}>
           <Text style={styles.totalLabel}>{t.autopay}</Text>
           <Text style={styles.totalAmount}>{formatCurrency(total)}</Text>
         </View>
-
         <View style={styles.form}>
           <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
           <FormInput label={t.amount} value={form.amount} keyboardType="numeric" onChangeText={(value) => updateForm("amount", value)} />
@@ -206,11 +220,7 @@ export default function AutopayScreen({ t, language, setLanguage }) {
           <FormInput label={t.paymentLink} value={form.paymentLink} onChangeText={(value) => updateForm("paymentLink", value)} />
           <View style={styles.frequencyWrap}>
             {FREQUENCIES.map((frequency) => (
-              <Pressable
-                key={frequency}
-                style={[styles.frequencyChip, form.frequency === frequency && styles.frequencyActive]}
-                onPress={() => updateForm("frequency", frequency)}
-              >
+              <Pressable key={frequency} style={[styles.frequencyChip, form.frequency === frequency && styles.frequencyActive]} onPress={() => updateForm("frequency", frequency)}>
                 <Text style={[styles.frequencyText, form.frequency === frequency && styles.frequencyActiveText]}>{frequency}</Text>
               </Pressable>
             ))}
@@ -218,27 +228,24 @@ export default function AutopayScreen({ t, language, setLanguage }) {
           <ActionButton label={editId ? t.update : t.add} icon={editId ? "save-outline" : "add-outline"} onPress={addOrUpdateItem} disabled={loading} />
           {editId ? <ActionButton label={t.cancel} icon="close-outline" variant="light" onPress={clearForm} /> : null}
         </View>
-
         <FilterChips filters={filters} activeFilter={filter} onChange={setFilter} />
-
         {loading ? <Text style={styles.info}>{t.loading}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {!loading && !visibleItems.length ? <Text style={styles.info}>{t.emptyAutopay}</Text> : null}
-
+        {!loading && !visibleItems.length ? <Text style={styles.info}>{emptyMessage}</Text> : null}
         {visibleItems.map((item) => {
           const status = getDateStatus(item.date, item.paid, t, t.paid);
           const hasPaymentLink = Boolean(item.paymentLink);
           return (
             <View key={item.id} style={[styles.card, ["soon", "today"].includes(status.kind) && styles.alertCard, status.kind === "overdue" && styles.overdueCard]}>
               <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.cardLine}>{formatCurrency(item.amount)} · {item.date}</Text>
-              <Text style={styles.cardLine}>{t.frequency}: {item.frequency}</Text>
+              <Text style={styles.cardLine}>{formatCurrency(item.amount)} - {item.date}</Text>
+              <Text style={styles.frequencyBadge}>{item.frequency}</Text>
               <Text style={[styles.status, status.kind === "overdue" && styles.dangerText]}>{status.text}</Text>
               <View style={styles.actions}>
                 <ActionButton label={hasPaymentLink ? t.openLink : t.noPaymentLink} icon="open-outline" variant="light" disabled={!hasPaymentLink} onPress={() => hasPaymentLink && Linking.openURL(item.paymentLink)} />
                 <ActionButton label={t.edit} icon="create-outline" variant="light" onPress={() => startEdit(item)} />
-                <ActionButton label={item.paid ? t.markUnpaid : t.markPaid} icon="checkmark-outline" variant="success" onPress={() => togglePaid(item)} />
-                <ActionButton label={t.delete} icon="trash-outline" variant="danger" onPress={() => deleteItem(item)} />
+                <ActionButton label={item.frequency === "One-time" && item.paid ? t.markUnpaid : t.markPaid} icon="checkmark-outline" variant="success" onPress={() => handlePaid(item)} />
+                <ActionButton label={t.delete} icon="trash-outline" variant="danger" onPress={() => confirmDelete(t, () => deleteItem(item))} />
               </View>
             </View>
           );
@@ -280,6 +287,7 @@ const styles = StyleSheet.create({
   overdueCard: { borderColor: COLORS.danger, backgroundColor: "#fff1f2" },
   cardTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
   cardLine: { color: COLORS.muted, fontSize: 15 },
+  frequencyBadge: { alignSelf: "flex-start", color: COLORS.primary, backgroundColor: COLORS.primaryLight, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, fontWeight: "800" },
   status: { color: COLORS.primary, fontSize: 14, fontWeight: "900" },
   dangerText: { color: COLORS.danger },
   actions: { gap: 8 },

@@ -9,6 +9,7 @@ import AutopayScreen from "./screens/AutopayScreen";
 import BillsScreen from "./screens/BillsScreen";
 import WarrantyScreen from "./screens/WarrantyScreen";
 import TasksScreen from "./screens/TasksScreen";
+import ProfileScreen from "./screens/ProfileScreen";
 import { loadLanguage, saveLanguage } from "./utils/storage";
 import { setupNotificationHandler, requestNotificationPermission } from "./utils/notifications";
 import { translations } from "./utils/translations";
@@ -29,6 +30,7 @@ function tabIcon(routeName, color, size) {
 
 export default function App() {
   const [language, setLanguageState] = useState("en");
+  const [showProfile, setShowProfile] = useState(false);
   const t = translations[language];
 
   useEffect(() => {
@@ -48,37 +50,42 @@ export default function App() {
     language,
     setLanguage,
     t,
+    onProfilePress: () => setShowProfile(true),
   };
 
   return (
     <NavigationContainer>
       <StatusBar style="dark" />
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarActiveTintColor: COLORS.primary,
-          tabBarInactiveTintColor: "#6b7280",
-          tabBarStyle: { height: 64, paddingBottom: 8, paddingTop: 8 },
-          tabBarLabelStyle: { fontSize: 12, fontWeight: "700" },
-          tabBarIcon: ({ color, size }) => tabIcon(route.name, color, size),
-        })}
-      >
-        <Tab.Screen name="Home" options={{ tabBarLabel: t.dashboard }}>
-          {() => <DashboardScreen {...screenProps} />}
-        </Tab.Screen>
-        <Tab.Screen name="Autopay" options={{ tabBarLabel: t.autopay }}>
-          {() => <AutopayScreen {...screenProps} />}
-        </Tab.Screen>
-        <Tab.Screen name="Bills" options={{ tabBarLabel: t.bills }}>
-          {() => <BillsScreen {...screenProps} />}
-        </Tab.Screen>
-        <Tab.Screen name="Warranty" options={{ tabBarLabel: t.warranty }}>
-          {() => <WarrantyScreen {...screenProps} />}
-        </Tab.Screen>
-        <Tab.Screen name="Tasks" options={{ tabBarLabel: t.tasks }}>
-          {() => <TasksScreen {...screenProps} />}
-        </Tab.Screen>
-      </Tab.Navigator>
+      {showProfile ? (
+        <ProfileScreen {...screenProps} onClose={() => setShowProfile(false)} />
+      ) : (
+        <Tab.Navigator
+          screenOptions={({ route }) => ({
+            headerShown: false,
+            tabBarActiveTintColor: COLORS.primary,
+            tabBarInactiveTintColor: "#6b7280",
+            tabBarStyle: { height: 64, paddingBottom: 8, paddingTop: 8 },
+            tabBarLabelStyle: { fontSize: 12, fontWeight: "700" },
+            tabBarIcon: ({ color, size }) => tabIcon(route.name, color, size),
+          })}
+        >
+          <Tab.Screen name="Home" options={{ tabBarLabel: t.dashboard }}>
+            {() => <DashboardScreen {...screenProps} />}
+          </Tab.Screen>
+          <Tab.Screen name="Autopay" options={{ tabBarLabel: t.autopay }}>
+            {() => <AutopayScreen {...screenProps} />}
+          </Tab.Screen>
+          <Tab.Screen name="Bills" options={{ tabBarLabel: t.bills }}>
+            {() => <BillsScreen {...screenProps} />}
+          </Tab.Screen>
+          <Tab.Screen name="Warranty" options={{ tabBarLabel: t.warranty }}>
+            {() => <WarrantyScreen {...screenProps} />}
+          </Tab.Screen>
+          <Tab.Screen name="Tasks" options={{ tabBarLabel: t.tasks }}>
+            {() => <TasksScreen {...screenProps} />}
+          </Tab.Screen>
+        </Tab.Navigator>
+      )}
     </NavigationContainer>
   );
 }

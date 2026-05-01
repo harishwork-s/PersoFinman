@@ -14,7 +14,7 @@ import {
 import { formatCurrency } from "../utils/format";
 import { loadAllData } from "../utils/storage";
 
-export default function DashboardScreen({ t, language, setLanguage }) {
+export default function DashboardScreen({ t, language, setLanguage, onProfilePress }) {
   const [data, setData] = useState({ autopay: [], bills: [], tasks: [], warranty: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -63,7 +63,7 @@ export default function DashboardScreen({ t, language, setLanguage }) {
 
   return (
     <View style={styles.page}>
-      <AppHeader title={t.dashboard} t={t} language={language} setLanguage={setLanguage} />
+      <AppHeader title={t.dashboard} t={t} language={language} setLanguage={setLanguage} onProfilePress={onProfilePress} />
       <ScrollView contentContainerStyle={styles.content}>
         {loading ? <Text style={styles.info}>{t.loading}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}

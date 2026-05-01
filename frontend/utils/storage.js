@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { STORAGE_KEYS } from "./constants";
+import { DEFAULT_PROFILE, STORAGE_KEYS } from "./constants";
 
 export async function loadCollection(key) {
   const raw = await AsyncStorage.getItem(key);
@@ -27,4 +27,25 @@ export async function loadLanguage() {
 
 export async function saveLanguage(language) {
   await AsyncStorage.setItem(STORAGE_KEYS.language, language);
+}
+
+export async function loadProfile() {
+  const raw = await AsyncStorage.getItem(STORAGE_KEYS.profile);
+  if (raw) return { ...DEFAULT_PROFILE, ...JSON.parse(raw) };
+  await AsyncStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(DEFAULT_PROFILE));
+  return DEFAULT_PROFILE;
+}
+
+export async function saveProfile(profile) {
+  await AsyncStorage.setItem(STORAGE_KEYS.profile, JSON.stringify(profile));
+}
+
+export async function clearAppData() {
+  await AsyncStorage.multiRemove([
+    STORAGE_KEYS.bills,
+    STORAGE_KEYS.autopay,
+    STORAGE_KEYS.tasks,
+    STORAGE_KEYS.warranty,
+    STORAGE_KEYS.profile,
+  ]);
 }
