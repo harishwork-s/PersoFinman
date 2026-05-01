@@ -1,20 +1,40 @@
 import React, { useCallback, useState } from "react";
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
+import { Ionicons } from "@expo/vector-icons";
 
 import ActionButton from "../components/ActionButton";
 import AppHeader from "../components/AppHeader";
+import FilterChips from "../components/FilterChips";
+import FormInput from "../components/FormInput";
+import { COLORS, STORAGE_KEYS } from "../utils/constants";
+import { calculateExpiryDate, getWarrantyStatus, isValidDate, sortByDate } from "../utils/dateUtils";
+import { createId } from "../utils/format";
+import { persistInvoice, removeInvoice } from "../utils/invoiceStorage";
+import { cancelItemNotifications, scheduleItemNotifications } from "../utils/notifications";
+import { loadCollection, saveCollection } from "../utils/storage";
 
+const blankForm = { name: "", purchaseDate: "", warrantyMonths: "" };
 
-const blankForm = { name: "", purchase_date: "", warranty_months: "" };
-const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-
-
-export default function WarrantyScreen({ apiBaseUrl, t, language, setLanguage }) {
+export default function WarrantyScreen({ t, language, setLanguage }) {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(blankForm);
-  const [invoice, setInvoice] = useState(null);
+  const [editId, setEditId] = useState(null);
+  const [invoiceAsset, setInvoiceAsset] = useState(null);
+  const [filter, setFilter] = useState("all");
+  const [previewUri, setPreviewUri] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -22,11 +42,11 @@ export default function WarrantyScreen({ apiBaseUrl, t, language, setLanguage })
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${apiBaseUrl}/warranty`);
-      if (!response.ok) throw new Error("API error");
-      setItems(await response.json());
+      const saved = await loadCollection(STORAGE_KEYS.warranty);
+      const normalized = saved.map(normalizeWarranty);
+      setItems(sortByDate(normalized, "expiryDate"));
     } catch (err) {
-      setError(t.apiError);
+      setError(t.storageError);
     } finally {
       setLoading(false);
     }
@@ -35,7 +55,7 @@ export default function WarrantyScreen({ apiBaseUrl, t, language, setLanguage })
   useFocusEffect(
     useCallback(() => {
       loadItems();
-    }, [apiBaseUrl, language])
+    }, [language])
   );
 
   function updateForm(key, value) {
@@ -55,7 +75,7 @@ export default function WarrantyScreen({ apiBaseUrl, t, language, setLanguage })
         quality: 0.7,
       });
       if (!result.canceled && result.assets?.length) {
-        setInvoice(result.assets[0]);
+        setInvoiceAsset(result.assets[0]);
       }
     } catch (err) {
       Alert.alert(t.selectImageError);
@@ -63,123 +83,228 @@ export default function WarrantyScreen({ apiBaseUrl, t, language, setLanguage })
   }
 
   function validate() {
-    if (!form.name.trim() || !form.purchase_date.trim() || !form.warranty_months.trim()) {
+    if (!form.name.trim()) {
       Alert.alert(t.required);
       return false;
     }
-    if (Number(form.warranty_months) <= 0) {
-      Alert.alert(t.invalidMonths);
-      return false;
-    }
-    if (!datePattern.test(form.purchase_date)) {
+    if (!isValidDate(form.purchaseDate)) {
       Alert.alert(t.invalidDate);
       return false;
     }
-    if (!invoice) {
-      Alert.alert(t.invoiceRequired);
+    if (!Number.isFinite(Number(form.warrantyMonths)) || Number(form.warrantyMonths) <= 0) {
+      Alert.alert(t.invalidMonths);
       return false;
     }
     return true;
   }
 
-  async function addItem() {
+  async function saveItems(nextItems) {
+    const sorted = sortByDate(nextItems, "expiryDate");
+    setItems(sorted);
+    await saveCollection(STORAGE_KEYS.warranty, sorted);
+  }
+
+  async function addOrUpdateItem() {
     if (!validate()) return;
     setLoading(true);
     setError("");
     try {
-      const body = new FormData();
-      body.append("name", form.name);
-      body.append("purchase_date", form.purchase_date);
-      body.append("warranty_months", form.warranty_months);
-      if (invoice) {
-        const imageName = invoice.fileName || `invoice-${Date.now()}.jpg`;
-        body.append("invoice_image", {
-          uri: invoice.uri,
-          name: imageName,
-          type: invoice.mimeType || "image/jpeg",
-        });
+      const now = new Date().toISOString();
+      if (editId) {
+        const oldItem = items.find((item) => item.id === editId);
+        await cancelItemNotifications(oldItem?.notificationIds);
+        let invoiceUri = oldItem?.invoiceUri || "";
+        if (invoiceAsset) {
+          await removeInvoice(invoiceUri);
+          invoiceUri = await persistInvoice(invoiceAsset, editId);
+        }
+        const updated = {
+          ...oldItem,
+          name: form.name.trim(),
+          purchaseDate: form.purchaseDate,
+          warrantyMonths: Number(form.warrantyMonths),
+          expiryDate: calculateExpiryDate(form.purchaseDate, Number(form.warrantyMonths)),
+          invoiceUri,
+          updatedAt: now,
+        };
+        updated.notificationIds = await safeSchedule("warranty", updated);
+        await saveItems(items.map((item) => (item.id === editId ? updated : item)));
+      } else {
+        const id = createId("warranty");
+        const item = {
+          id,
+          name: form.name.trim(),
+          purchaseDate: form.purchaseDate,
+          warrantyMonths: Number(form.warrantyMonths),
+          expiryDate: calculateExpiryDate(form.purchaseDate, Number(form.warrantyMonths)),
+          invoiceUri: invoiceAsset ? await persistInvoice(invoiceAsset, id) : "",
+          notificationIds: [],
+          createdAt: now,
+          updatedAt: now,
+        };
+        item.notificationIds = await safeSchedule("warranty", item);
+        await saveItems([...items, item]);
       }
-
-      const response = await fetch(`${apiBaseUrl}/warranty`, {
-        method: "POST",
-        body,
-      });
-      if (!response.ok) throw new Error("API error");
-      setForm(blankForm);
-      setInvoice(null);
-      await loadItems();
+      clearForm();
     } catch (err) {
-      setError(t.apiError);
+      setError(t.storageError);
     } finally {
       setLoading(false);
     }
+  }
+
+  function startEdit(item) {
+    setEditId(item.id);
+    setInvoiceAsset(null);
+    setForm({
+      name: item.name,
+      purchaseDate: item.purchaseDate,
+      warrantyMonths: String(item.warrantyMonths),
+    });
+  }
+
+  function clearForm() {
+    setEditId(null);
+    setInvoiceAsset(null);
+    setForm(blankForm);
   }
 
   async function deleteItem(item) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${apiBaseUrl}/warranty/${item.id}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("API error");
-      await loadItems();
+      await cancelItemNotifications(item.notificationIds);
+      await removeInvoice(item.invoiceUri);
+      await saveItems(items.filter((current) => current.id !== item.id));
+      if (editId === item.id) clearForm();
     } catch (err) {
-      setError(t.apiError);
+      setError(t.storageError);
     } finally {
       setLoading(false);
     }
   }
 
+  async function safeSchedule(type, item) {
+    try {
+      return await scheduleItemNotifications(type, item);
+    } catch (err) {
+      Alert.alert(t.notificationError);
+      return [];
+    }
+  }
+
+  const filters = [
+    { key: "all", label: t.all },
+    { key: "active", label: t.activeFilter },
+    { key: "soon", label: t.expiringSoonFilter },
+    { key: "expired", label: t.expiredFilter },
+  ];
+  const visibleItems = items.filter((item) => {
+    const status = getWarrantyStatus(item, t);
+    if (filter === "active") return status.kind === "active";
+    if (filter === "soon") return ["today", "soon"].includes(status.kind);
+    if (filter === "expired") return status.kind === "expired";
+    return true;
+  });
+
   return (
-    <View style={styles.page}>
+    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <AppHeader title={t.warranty} t={t} language={language} setLanguage={setLanguage} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.form}>
-          <AppInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
-          <AppInput label={`${t.purchaseDate} (YYYY-MM-DD)`} value={form.purchase_date} onChangeText={(value) => updateForm("purchase_date", value)} />
-          <AppInput label={t.warrantyMonths} value={form.warranty_months} keyboardType="numeric" onChangeText={(value) => updateForm("warranty_months", value)} />
-          <ActionButton label={invoice ? t.invoiceSelected : t.chooseInvoice} icon="image-outline" variant="light" onPress={chooseInvoice} />
-          <ActionButton label={t.add} icon="add-outline" onPress={addItem} disabled={loading} />
+          <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
+          <FormInput label={`${t.purchaseDate} (YYYY-MM-DD)`} value={form.purchaseDate} onChangeText={(value) => updateForm("purchaseDate", value)} />
+          <FormInput label={t.warrantyMonths} value={form.warrantyMonths} keyboardType="numeric" onChangeText={(value) => updateForm("warrantyMonths", value)} />
+          <ActionButton label={invoiceAsset ? t.invoiceSelected : t.chooseInvoice} icon="image-outline" variant="light" onPress={chooseInvoice} />
+          <ActionButton label={editId ? t.update : t.add} icon={editId ? "save-outline" : "add-outline"} onPress={addOrUpdateItem} disabled={loading} />
+          {editId ? <ActionButton label={t.cancel} icon="close-outline" variant="light" onPress={clearForm} /> : null}
         </View>
+
+        <FilterChips filters={filters} activeFilter={filter} onChange={setFilter} />
 
         {loading ? <Text style={styles.info}>{t.loading}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {!loading && !items.length ? <Text style={styles.info}>{t.emptyWarranty}</Text> : null}
+        {!loading && !visibleItems.length ? <Text style={styles.info}>{t.emptyWarranty}</Text> : null}
 
-        {items.map((item) => (
-          <View key={item.id} style={[styles.card, item.is_due_soon && styles.alertCard]}>
-            <Text style={styles.cardTitle}>{item.name}</Text>
-            <Text style={styles.cardLine}>{t.expiresOn}: {item.expiry_date}</Text>
-            {item.is_due_soon ? <Text style={styles.alertText}>{t.expiresSoon} · {item.days_remaining} {t.days}</Text> : null}
-            {item.invoice_image_url ? (
-              <Image source={{ uri: item.invoice_image_url }} style={styles.invoiceImage} />
-            ) : (
-              <Text style={styles.cardLine}>{t.noInvoice}</Text>
-            )}
-            <ActionButton label={t.delete} icon="trash-outline" variant="danger" onPress={() => deleteItem(item)} />
-          </View>
-        ))}
+        {visibleItems.map((item) => {
+          const status = getWarrantyStatus(item, t);
+          return (
+            <View key={item.id} style={[styles.card, ["soon", "today"].includes(status.kind) && styles.alertCard, status.kind === "expired" && styles.overdueCard]}>
+              <View style={styles.cardTop}>
+                <View style={styles.cardCopy}>
+                  <Text style={styles.cardTitle}>{item.name}</Text>
+                  <Text style={styles.cardLine}>{t.expiresOn}: {status.expiryDate}</Text>
+                  <Text style={[styles.status, status.kind === "expired" && styles.dangerText]}>{status.text}</Text>
+                </View>
+                {item.invoiceUri ? (
+                  <Image source={{ uri: item.invoiceUri }} style={styles.thumbnail} />
+                ) : (
+                  <View style={styles.emptyThumb}>
+                    <Ionicons name="image-outline" size={22} color={COLORS.muted} />
+                  </View>
+                )}
+              </View>
+              {item.invoiceUri ? (
+                <ActionButton label={t.viewInvoice} icon="eye-outline" variant="light" onPress={() => setPreviewUri(item.invoiceUri)} />
+              ) : (
+                <Text style={styles.cardLine}>{t.noInvoiceAttached}</Text>
+              )}
+              <View style={styles.actions}>
+                <ActionButton label={t.edit} icon="create-outline" variant="light" onPress={() => startEdit(item)} />
+                <ActionButton label={t.delete} icon="trash-outline" variant="danger" onPress={() => deleteItem(item)} />
+              </View>
+            </View>
+          );
+        })}
       </ScrollView>
-    </View>
+
+      <Modal visible={Boolean(previewUri)} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <Pressable style={styles.closeButton} onPress={() => setPreviewUri("")}>
+            <Ionicons name="close-outline" size={28} color={COLORS.white} />
+          </Pressable>
+          {previewUri ? <Image source={{ uri: previewUri }} style={styles.previewImage} resizeMode="contain" /> : null}
+        </View>
+      </Modal>
+    </KeyboardAvoidingView>
   );
 }
 
-
-function AppInput({ label, ...props }) {
-  return <TextInput style={styles.input} placeholder={label} placeholderTextColor="#64748b" {...props} />;
+function normalizeWarranty(item) {
+  const purchaseDate = item.purchaseDate || item.purchase_date || "";
+  const warrantyMonths = Number(item.warrantyMonths || item.warranty_months || 0);
+  return {
+    id: item.id || createId("warranty"),
+    name: item.name || "",
+    purchaseDate,
+    warrantyMonths,
+    expiryDate: item.expiryDate || calculateExpiryDate(purchaseDate, warrantyMonths),
+    invoiceUri: item.invoiceUri || item.invoice_image_url || item.invoice_image_path || "",
+    notificationIds: item.notificationIds || [],
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+  };
 }
 
-
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: "#f7f9fc" },
-  content: { padding: 16, gap: 14 },
+  page: { flex: 1, backgroundColor: COLORS.background },
+  content: { padding: 16, paddingBottom: 96, gap: 14 },
   form: { gap: 10 },
-  input: { minHeight: 50, borderRadius: 8, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#d8dee8", paddingHorizontal: 14, fontSize: 16 },
-  card: { backgroundColor: "#ffffff", borderRadius: 8, padding: 14, gap: 8, borderWidth: 1, borderColor: "#e5e7eb" },
+  card: { backgroundColor: COLORS.white, borderRadius: 8, padding: 14, gap: 10, borderWidth: 1, borderColor: COLORS.border },
   alertCard: { borderColor: "#f59e0b", backgroundColor: "#fffaf0" },
-  cardTitle: { color: "#111827", fontSize: 18, fontWeight: "900" },
-  cardLine: { color: "#475569", fontSize: 15 },
-  alertText: { color: "#92400e", fontSize: 14, fontWeight: "900" },
-  invoiceImage: { width: "100%", height: 170, borderRadius: 8, backgroundColor: "#e5e7eb" },
-  info: { color: "#475569", fontSize: 15, fontWeight: "700" },
-  error: { color: "#b42318", fontSize: 15, fontWeight: "800" },
+  overdueCard: { borderColor: COLORS.danger, backgroundColor: "#fff1f2" },
+  cardTop: { flexDirection: "row", gap: 12, alignItems: "center" },
+  cardCopy: { flex: 1 },
+  cardTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
+  cardLine: { color: COLORS.muted, fontSize: 15, marginTop: 4 },
+  status: { color: COLORS.primary, fontSize: 14, fontWeight: "900", marginTop: 4 },
+  dangerText: { color: COLORS.danger },
+  thumbnail: { width: 72, height: 72, borderRadius: 8, backgroundColor: "#e5e7eb" },
+  emptyThumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: "#eef2f7", alignItems: "center", justifyContent: "center" },
+  actions: { gap: 8 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", alignItems: "center", justifyContent: "center", padding: 18 },
+  closeButton: { position: "absolute", top: 48, right: 18, width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.16)", zIndex: 1 },
+  previewImage: { width: "100%", height: "82%" },
+  info: { color: COLORS.muted, fontSize: 15, fontWeight: "700" },
+  error: { color: COLORS.danger, fontSize: 15, fontWeight: "800" },
 });

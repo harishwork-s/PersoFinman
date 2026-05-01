@@ -1,23 +1,24 @@
 import React, { useCallback, useState } from "react";
-import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 
 import ActionButton from "../components/ActionButton";
 import AppHeader from "../components/AppHeader";
+import FilterChips from "../components/FilterChips";
+import FormInput from "../components/FormInput";
+import { COLORS, STORAGE_KEYS } from "../utils/constants";
+import { getDateStatus, isValidDate, sortByDate } from "../utils/dateUtils";
+import { formatCurrency, createId } from "../utils/format";
+import { cancelItemNotifications, scheduleItemNotifications } from "../utils/notifications";
+import { loadCollection, saveCollection } from "../utils/storage";
 
+const blankForm = { name: "", amount: "", dueDate: "" };
 
-const blankForm = { name: "", amount: "", due_date: "" };
-const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-
-
-function money(value) {
-  return `₹${Number(value || 0).toFixed(2)}`;
-}
-
-
-export default function TasksScreen({ apiBaseUrl, t, language, setLanguage }) {
+export default function TasksScreen({ t, language, setLanguage }) {
   const [items, setItems] = useState([]);
   const [form, setForm] = useState(blankForm);
+  const [editId, setEditId] = useState(null);
+  const [filter, setFilter] = useState("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -25,11 +26,10 @@ export default function TasksScreen({ apiBaseUrl, t, language, setLanguage }) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${apiBaseUrl}/tasks`);
-      if (!response.ok) throw new Error("API error");
-      setItems(await response.json());
+      const saved = await loadCollection(STORAGE_KEYS.tasks);
+      setItems(sortByDate(saved.map(normalizeTask), "dueDate"));
     } catch (err) {
-      setError(t.apiError);
+      setError(t.storageError);
     } finally {
       setLoading(false);
     }
@@ -38,7 +38,7 @@ export default function TasksScreen({ apiBaseUrl, t, language, setLanguage }) {
   useFocusEffect(
     useCallback(() => {
       loadItems();
-    }, [apiBaseUrl, language])
+    }, [language])
   );
 
   function updateForm(key, value) {
@@ -46,118 +46,202 @@ export default function TasksScreen({ apiBaseUrl, t, language, setLanguage }) {
   }
 
   function validate() {
-    if (!form.name.trim() || !form.amount.trim() || !form.due_date.trim()) {
+    if (!form.name.trim()) {
       Alert.alert(t.required);
       return false;
     }
-    if (Number(form.amount) <= 0) {
+    if (!Number.isFinite(Number(form.amount)) || Number(form.amount) <= 0) {
       Alert.alert(t.invalidAmount);
       return false;
     }
-    if (!datePattern.test(form.due_date)) {
-      Alert.alert(t.invalidDate);
+    if (!isValidDate(form.dueDate)) {
+      Alert.alert(t.invalidDueDate);
       return false;
     }
     return true;
   }
 
-  async function addItem() {
+  async function saveItems(nextItems) {
+    const sorted = sortByDate(nextItems, "dueDate");
+    setItems(sorted);
+    await saveCollection(STORAGE_KEYS.tasks, sorted);
+  }
+
+  async function addOrUpdateItem() {
     if (!validate()) return;
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${apiBaseUrl}/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, amount: Number(form.amount), status: "pending" }),
-      });
-      if (!response.ok) throw new Error("API error");
-      setForm(blankForm);
-      await loadItems();
+      const now = new Date().toISOString();
+      if (editId) {
+        const oldItem = items.find((item) => item.id === editId);
+        await cancelItemNotifications(oldItem?.notificationIds);
+        const updated = {
+          ...oldItem,
+          name: form.name.trim(),
+          amount: Number(form.amount),
+          dueDate: form.dueDate,
+          updatedAt: now,
+        };
+        updated.notificationIds = updated.done ? [] : await safeSchedule("task", updated);
+        await saveItems(items.map((item) => (item.id === editId ? updated : item)));
+      } else {
+        const item = {
+          id: createId("task"),
+          name: form.name.trim(),
+          amount: Number(form.amount),
+          dueDate: form.dueDate,
+          done: false,
+          notificationIds: [],
+          createdAt: now,
+          updatedAt: now,
+        };
+        item.notificationIds = await safeSchedule("task", item);
+        await saveItems([...items, item]);
+      }
+      clearForm();
     } catch (err) {
-      setError(t.apiError);
+      setError(t.storageError);
     } finally {
       setLoading(false);
     }
   }
 
-  async function updateStatus(item) {
-    const nextStatus = item.status === "completed" ? "pending" : "completed";
-    await simpleRequest(`${apiBaseUrl}/tasks/${item.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
+  function startEdit(item) {
+    setEditId(item.id);
+    setForm({
+      name: item.name,
+      amount: String(item.amount),
+      dueDate: item.dueDate,
     });
   }
 
-  async function deleteItem(item) {
-    await simpleRequest(`${apiBaseUrl}/tasks/${item.id}`, { method: "DELETE" });
+  function clearForm() {
+    setEditId(null);
+    setForm(blankForm);
   }
 
-  async function simpleRequest(url, options) {
+  async function toggleDone(item) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(url, options);
-      if (!response.ok) throw new Error("API error");
-      await loadItems();
+      await cancelItemNotifications(item.notificationIds);
+      const updated = {
+        ...item,
+        done: !item.done,
+        updatedAt: new Date().toISOString(),
+      };
+      updated.notificationIds = updated.done ? [] : await safeSchedule("task", updated);
+      await saveItems(items.map((current) => (current.id === item.id ? updated : current)));
     } catch (err) {
-      setError(t.apiError);
+      setError(t.storageError);
     } finally {
       setLoading(false);
     }
   }
 
+  async function deleteItem(item) {
+    setLoading(true);
+    setError("");
+    try {
+      await cancelItemNotifications(item.notificationIds);
+      await saveItems(items.filter((current) => current.id !== item.id));
+      if (editId === item.id) clearForm();
+    } catch (err) {
+      setError(t.storageError);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function safeSchedule(type, item) {
+    try {
+      return await scheduleItemNotifications(type, item);
+    } catch (err) {
+      Alert.alert(t.notificationError);
+      return [];
+    }
+  }
+
+  const filters = [
+    { key: "all", label: t.all },
+    { key: "pending", label: t.pending },
+    { key: "done", label: t.done },
+    { key: "soon", label: t.dueSoonFilter },
+    { key: "overdue", label: t.overdueFilter },
+  ];
+  const visibleItems = items.filter((item) => {
+    const status = getDateStatus(item.dueDate, item.done, t, t.done);
+    if (filter === "pending") return !item.done;
+    if (filter === "done") return item.done;
+    if (filter === "soon") return !item.done && ["today", "soon"].includes(status.kind);
+    if (filter === "overdue") return !item.done && status.kind === "overdue";
+    return true;
+  });
+
   return (
-    <View style={styles.page}>
+    <KeyboardAvoidingView style={styles.page} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <AppHeader title={t.tasks} t={t} language={language} setLanguage={setLanguage} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.form}>
-          <AppInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
-          <AppInput label={t.amount} value={form.amount} keyboardType="numeric" onChangeText={(value) => updateForm("amount", value)} />
-          <AppInput label={`${t.dueDate} (YYYY-MM-DD)`} value={form.due_date} onChangeText={(value) => updateForm("due_date", value)} />
-          <ActionButton label={t.add} icon="add-outline" onPress={addItem} disabled={loading} />
+          <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
+          <FormInput label={t.amount} value={form.amount} keyboardType="numeric" onChangeText={(value) => updateForm("amount", value)} />
+          <FormInput label={`${t.dueDate} (YYYY-MM-DD)`} value={form.dueDate} onChangeText={(value) => updateForm("dueDate", value)} />
+          <ActionButton label={editId ? t.update : t.add} icon={editId ? "save-outline" : "add-outline"} onPress={addOrUpdateItem} disabled={loading} />
+          {editId ? <ActionButton label={t.cancel} icon="close-outline" variant="light" onPress={clearForm} /> : null}
         </View>
+
+        <FilterChips filters={filters} activeFilter={filter} onChange={setFilter} />
 
         {loading ? <Text style={styles.info}>{t.loading}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {!loading && !items.length ? <Text style={styles.info}>{t.emptyTasks}</Text> : null}
+        {!loading && !visibleItems.length ? <Text style={styles.info}>{t.emptyTasks}</Text> : null}
 
-        {items.map((item) => (
-          <View key={item.id} style={[styles.card, item.is_due_soon && styles.alertCard]}>
-            <Text style={styles.cardTitle}>{item.name}</Text>
-            <Text style={styles.cardLine}>{money(item.amount)} · {item.due_date}</Text>
-            {item.is_due_soon ? <Text style={styles.alertText}>{t.dueSoon} · {item.days_remaining} {t.days}</Text> : null}
-            <Text style={styles.status}>{item.status === "completed" ? t.completed : t.pending}</Text>
-            <View style={styles.actions}>
-              <ActionButton label={item.status === "completed" ? t.markPending : t.markDone} icon="checkmark-outline" variant="success" onPress={() => updateStatus(item)} />
-              <ActionButton label={t.delete} icon="trash-outline" variant="danger" onPress={() => deleteItem(item)} />
+        {visibleItems.map((item) => {
+          const status = getDateStatus(item.dueDate, item.done, t, t.done);
+          return (
+            <View key={item.id} style={[styles.card, ["soon", "today"].includes(status.kind) && styles.alertCard, status.kind === "overdue" && styles.overdueCard]}>
+              <Text style={styles.cardTitle}>{item.name}</Text>
+              <Text style={styles.cardLine}>{formatCurrency(item.amount)} · {item.dueDate}</Text>
+              <Text style={[styles.status, status.kind === "overdue" && styles.dangerText]}>{status.text}</Text>
+              <View style={styles.actions}>
+                <ActionButton label={t.edit} icon="create-outline" variant="light" onPress={() => startEdit(item)} />
+                <ActionButton label={item.done ? t.markPending : t.markDone} icon="checkmark-outline" variant="success" onPress={() => toggleDone(item)} />
+                <ActionButton label={t.delete} icon="trash-outline" variant="danger" onPress={() => deleteItem(item)} />
+              </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
-
-function AppInput({ label, ...props }) {
-  return <TextInput style={styles.input} placeholder={label} placeholderTextColor="#64748b" {...props} />;
+function normalizeTask(item) {
+  return {
+    id: item.id || createId("task"),
+    name: item.name || "",
+    amount: Number(item.amount || 0),
+    dueDate: item.dueDate || item.due_date || "",
+    done: Boolean(item.done || item.status === "completed"),
+    notificationIds: item.notificationIds || [],
+    createdAt: item.createdAt || new Date().toISOString(),
+    updatedAt: item.updatedAt || new Date().toISOString(),
+  };
 }
 
-
 const styles = StyleSheet.create({
-  page: { flex: 1, backgroundColor: "#f7f9fc" },
-  content: { padding: 16, gap: 14 },
+  page: { flex: 1, backgroundColor: COLORS.background },
+  content: { padding: 16, paddingBottom: 96, gap: 14 },
   form: { gap: 10 },
-  input: { minHeight: 50, borderRadius: 8, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#d8dee8", paddingHorizontal: 14, fontSize: 16 },
-  card: { backgroundColor: "#ffffff", borderRadius: 8, padding: 14, gap: 8, borderWidth: 1, borderColor: "#e5e7eb" },
+  card: { backgroundColor: COLORS.white, borderRadius: 8, padding: 14, gap: 8, borderWidth: 1, borderColor: COLORS.border },
   alertCard: { borderColor: "#f59e0b", backgroundColor: "#fffaf0" },
-  cardTitle: { color: "#111827", fontSize: 18, fontWeight: "900" },
-  cardLine: { color: "#475569", fontSize: 15 },
-  alertText: { color: "#92400e", fontSize: 14, fontWeight: "900" },
-  status: { color: "#176B87", fontSize: 14, fontWeight: "900" },
+  overdueCard: { borderColor: COLORS.danger, backgroundColor: "#fff1f2" },
+  cardTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
+  cardLine: { color: COLORS.muted, fontSize: 15 },
+  status: { color: COLORS.primary, fontSize: 14, fontWeight: "900" },
+  dangerText: { color: COLORS.danger },
   actions: { gap: 8 },
-  info: { color: "#475569", fontSize: 15, fontWeight: "700" },
-  error: { color: "#b42318", fontSize: 15, fontWeight: "800" },
+  info: { color: COLORS.muted, fontSize: 15, fontWeight: "700" },
+  error: { color: COLORS.danger, fontSize: 15, fontWeight: "800" },
 });

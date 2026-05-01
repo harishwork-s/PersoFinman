@@ -2,6 +2,8 @@ import React from "react";
 import { Pressable, StyleSheet, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
+import { COLORS } from "../utils/constants";
+
 
 export default function ActionButton({ label, icon, onPress, variant = "primary", disabled = false }) {
   return (
@@ -10,7 +12,7 @@ export default function ActionButton({ label, icon, onPress, variant = "primary"
       onPress={onPress}
       disabled={disabled}
     >
-      {icon ? <Ionicons name={icon} size={18} color={variant === "light" ? "#176B87" : "#ffffff"} /> : null}
+      {icon ? <Ionicons name={icon} size={18} color={variant === "light" || disabled ? COLORS.primary : COLORS.white} /> : null}
       <Text style={[styles.text, variant === "light" && styles.lightText]}>{label}</Text>
     </Pressable>
   );
@@ -28,26 +30,26 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   primary: {
-    backgroundColor: "#176B87",
+    backgroundColor: COLORS.primary,
   },
   danger: {
-    backgroundColor: "#b42318",
+    backgroundColor: COLORS.danger,
   },
   success: {
-    backgroundColor: "#16803c",
+    backgroundColor: COLORS.success,
   },
   light: {
-    backgroundColor: "#e9f5f8",
+    backgroundColor: COLORS.primaryLight,
   },
   disabled: {
-    opacity: 0.6,
+    backgroundColor: "#eef2f7",
   },
   text: {
-    color: "#ffffff",
+    color: COLORS.white,
     fontSize: 15,
     fontWeight: "800",
   },
   lightText: {
-    color: "#176B87",
+    color: COLORS.primary,
   },
 });

@@ -4,19 +4,17 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 
 import AppHeader from "../components/AppHeader";
+import { COLORS } from "../utils/constants";
+import {
+  getDateStatus,
+  getWarrantyStatus,
+  isCurrentMonth,
+  sortByDate,
+} from "../utils/dateUtils";
+import { formatCurrency } from "../utils/format";
+import { loadAllData } from "../utils/storage";
 
-
-function money(value) {
-  return `₹${Number(value || 0).toFixed(2)}`;
-}
-
-
-function sum(items) {
-  return items.reduce((total, item) => total + Number(item.amount || 0), 0);
-}
-
-
-export default function DashboardScreen({ apiBaseUrl, t, language, setLanguage }) {
+export default function DashboardScreen({ t, language, setLanguage }) {
   const [data, setData] = useState({ autopay: [], bills: [], tasks: [], warranty: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -25,23 +23,9 @@ export default function DashboardScreen({ apiBaseUrl, t, language, setLanguage }
     setLoading(true);
     setError("");
     try {
-      const [autopayRes, billsRes, tasksRes, warrantyRes] = await Promise.all([
-        fetch(`${apiBaseUrl}/autopay`),
-        fetch(`${apiBaseUrl}/bills`),
-        fetch(`${apiBaseUrl}/tasks`),
-        fetch(`${apiBaseUrl}/warranty`),
-      ]);
-      if (!autopayRes.ok || !billsRes.ok || !tasksRes.ok || !warrantyRes.ok) {
-        throw new Error("API error");
-      }
-      setData({
-        autopay: await autopayRes.json(),
-        bills: await billsRes.json(),
-        tasks: await tasksRes.json(),
-        warranty: await warrantyRes.json(),
-      });
+      setData(await loadAllData());
     } catch (err) {
-      setError(t.apiError);
+      setError(t.storageError);
     } finally {
       setLoading(false);
     }
@@ -50,15 +34,30 @@ export default function DashboardScreen({ apiBaseUrl, t, language, setLanguage }
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [apiBaseUrl, language])
+    }, [language])
   );
 
-  const unpaidAutopay = data.autopay.filter((item) => item.status === "unpaid");
-  const unpaidBills = data.bills.filter((item) => item.status === "unpaid");
-  const pendingTasks = data.tasks.filter((item) => item.status === "pending");
-  const monthlyTotal = sum(unpaidAutopay) + sum(unpaidBills) + sum(pendingTasks);
-  const upcoming = [...unpaidAutopay, ...unpaidBills].filter((item) => item.is_due_soon);
-  const warrantyAlerts = data.warranty.filter((item) => item.is_due_soon);
+  const billsDueThisMonth = data.bills.filter((item) => !item.paid && isCurrentMonth(item.dueDate));
+  const autopayDueThisMonth = data.autopay.filter((item) => !item.paid && isCurrentMonth(item.date));
+  const tasksPendingThisMonth = data.tasks.filter((item) => !item.done && isCurrentMonth(item.dueDate));
+  const monthlyPendingAmount = [...billsDueThisMonth, ...autopayDueThisMonth, ...tasksPendingThisMonth].reduce(
+    (total, item) => total + Number(item.amount || 0),
+    0
+  );
+
+  const upcomingPayments = sortByDate(
+    [
+      ...data.bills.filter((item) => !item.paid).map((item) => ({ ...item, type: "bill", displayDate: item.dueDate })),
+      ...data.autopay.filter((item) => !item.paid).map((item) => ({ ...item, type: "autopay", displayDate: item.date })),
+    ],
+    "displayDate"
+  );
+  const warrantyAlerts = data.warranty
+    .map((item) => ({ ...item, statusInfo: getWarrantyStatus(item, t) }))
+    .filter((item) => ["expired", "today", "soon"].includes(item.statusInfo.kind))
+    .sort((a, b) => a.statusInfo.days - b.statusInfo.days);
+  const pendingTasks = sortByDate(data.tasks.filter((item) => !item.done), "dueDate");
+
   const hasAnyData =
     data.autopay.length || data.bills.length || data.tasks.length || data.warranty.length;
 
@@ -71,20 +70,30 @@ export default function DashboardScreen({ apiBaseUrl, t, language, setLanguage }
         {!loading && !hasAnyData ? <Text style={styles.info}>{t.emptyDashboard}</Text> : null}
 
         <View style={styles.summary}>
-          <Text style={styles.summaryLabel}>{t.totalMonthly}</Text>
-          <Text style={styles.summaryAmount}>{money(monthlyTotal)}</Text>
+          <Text style={styles.summaryLabel}>{t.monthlyPendingAmount}</Text>
+          <Text style={styles.summaryAmount}>{formatCurrency(monthlyPendingAmount)}</Text>
+        </View>
+
+        <View style={styles.summaryGrid}>
+          <MiniSummary label={t.billsDue} value={billsDueThisMonth.length} icon="receipt-outline" />
+          <MiniSummary label={t.autopayDue} value={autopayDueThisMonth.length} icon="card-outline" />
+          <MiniSummary label={t.tasksPending} value={tasksPendingThisMonth.length} icon="checkbox-outline" />
         </View>
 
         <Section title={t.upcomingPayments} icon="calendar-outline">
-          {upcoming.length ? (
-            upcoming.slice(0, 5).map((item) => (
-              <SmallRow
-                key={`${item.name}-${item.id}`}
-                name={item.name}
-                value={`${money(item.amount)} · ${item.days_remaining} ${t.days}`}
-                alertText={t.dueSoon}
-              />
-            ))
+          {upcomingPayments.length ? (
+            upcomingPayments.slice(0, 5).map((item) => {
+              const status = getDateStatus(item.displayDate, false, t, t.paid);
+              return (
+                <SmallRow
+                  key={`${item.type}-${item.id}`}
+                  name={item.name}
+                  value={`${formatCurrency(item.amount)} · ${status.text}`}
+                  badge={item.type === "bill" ? t.bills : t.autopay}
+                  statusKind={status.kind}
+                />
+              );
+            })
           ) : (
             <Text style={styles.empty}>{t.emptyBills}</Text>
           )}
@@ -96,8 +105,9 @@ export default function DashboardScreen({ apiBaseUrl, t, language, setLanguage }
               <SmallRow
                 key={item.id}
                 name={item.name}
-                value={`${item.expiry_date} · ${item.days_remaining} ${t.days}`}
-                alertText={t.expiresSoon}
+                value={`${item.statusInfo.text} · ${item.statusInfo.expiryDate}`}
+                badge={t.warranty}
+                statusKind={item.statusInfo.kind}
               />
             ))
           ) : (
@@ -107,14 +117,18 @@ export default function DashboardScreen({ apiBaseUrl, t, language, setLanguage }
 
         <Section title={t.pendingTasks} icon="checkbox-outline">
           {pendingTasks.length ? (
-            pendingTasks.slice(0, 5).map((item) => (
-              <SmallRow
-                key={item.id}
-                name={item.name}
-                value={`${money(item.amount)} · ${item.due_date}`}
-                alertText={item.is_due_soon ? t.dueSoon : ""}
-              />
-            ))
+            pendingTasks.slice(0, 5).map((item) => {
+              const status = getDateStatus(item.dueDate, false, t, t.done);
+              return (
+                <SmallRow
+                  key={item.id}
+                  name={item.name}
+                  value={`${formatCurrency(item.amount)} · ${status.text}`}
+                  badge={t.tasks}
+                  statusKind={status.kind}
+                />
+              );
+            })
           ) : (
             <Text style={styles.empty}>{t.emptyTasks}</Text>
           )}
@@ -124,12 +138,21 @@ export default function DashboardScreen({ apiBaseUrl, t, language, setLanguage }
   );
 }
 
+function MiniSummary({ label, value, icon }) {
+  return (
+    <View style={styles.miniCard}>
+      <Ionicons name={icon} size={20} color={COLORS.primary} />
+      <Text style={styles.miniValue}>{value}</Text>
+      <Text style={styles.miniLabel}>{label}</Text>
+    </View>
+  );
+}
 
 function Section({ title, icon, children }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionTitle}>
-        <Ionicons name={icon} size={20} color="#176B87" />
+        <Ionicons name={icon} size={20} color={COLORS.primary} />
         <Text style={styles.heading}>{title}</Text>
       </View>
       {children}
@@ -137,31 +160,32 @@ function Section({ title, icon, children }) {
   );
 }
 
-
-function SmallRow({ name, value, alertText }) {
+function SmallRow({ name, value, badge, statusKind }) {
   return (
     <View style={styles.row}>
       <View style={styles.rowText}>
         <Text style={styles.rowName}>{name}</Text>
         <Text style={styles.rowValue}>{value}</Text>
       </View>
-      {alertText ? <Text style={styles.badge}>{alertText}</Text> : null}
+      <Text style={[styles.badge, ["overdue", "expired"].includes(statusKind) && styles.dangerBadge]}>
+        {badge}
+      </Text>
     </View>
   );
 }
 
-
 const styles = StyleSheet.create({
   page: {
     flex: 1,
-    backgroundColor: "#f7f9fc",
+    backgroundColor: COLORS.background,
   },
   content: {
     padding: 16,
+    paddingBottom: 96,
     gap: 14,
   },
   summary: {
-    backgroundColor: "#176B87",
+    backgroundColor: COLORS.primary,
     borderRadius: 8,
     padding: 18,
   },
@@ -171,18 +195,42 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   summaryAmount: {
-    color: "#ffffff",
+    color: COLORS.white,
     fontSize: 34,
     fontWeight: "900",
     marginTop: 4,
   },
+  summaryGrid: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  miniCard: {
+    flex: 1,
+    minHeight: 92,
+    backgroundColor: COLORS.white,
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    justifyContent: "space-between",
+  },
+  miniValue: {
+    color: COLORS.text,
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  miniLabel: {
+    color: COLORS.muted,
+    fontSize: 12,
+    fontWeight: "800",
+  },
   section: {
-    backgroundColor: "#ffffff",
+    backgroundColor: COLORS.white,
     borderRadius: 8,
     padding: 14,
     gap: 10,
     borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: COLORS.border,
   },
   sectionTitle: {
     flexDirection: "row",
@@ -190,7 +238,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   heading: {
-    color: "#111827",
+    color: COLORS.text,
     fontSize: 18,
     fontWeight: "900",
   },
@@ -208,34 +256,38 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rowName: {
-    color: "#111827",
+    color: COLORS.text,
     fontSize: 16,
     fontWeight: "800",
   },
   rowValue: {
-    color: "#64748b",
+    color: COLORS.muted,
     fontSize: 14,
     marginTop: 2,
   },
   badge: {
-    color: "#92400e",
-    backgroundColor: "#fff7ed",
+    color: COLORS.warning,
+    backgroundColor: COLORS.warningBg,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 8,
     fontWeight: "800",
   },
+  dangerBadge: {
+    color: COLORS.danger,
+    backgroundColor: "#fff1f2",
+  },
   info: {
-    color: "#475569",
+    color: COLORS.muted,
     fontSize: 15,
     fontWeight: "700",
   },
   empty: {
-    color: "#64748b",
+    color: COLORS.muted,
     fontSize: 15,
   },
   error: {
-    color: "#b42318",
+    color: COLORS.danger,
     fontSize: 15,
     fontWeight: "800",
   },
