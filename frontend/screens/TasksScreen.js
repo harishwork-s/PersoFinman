@@ -7,7 +7,8 @@ import AppHeader from "../components/AppHeader";
 import FilterChips from "../components/FilterChips";
 import FormInput from "../components/FormInput";
 import SearchBar from "../components/SearchBar";
-import { COLORS, STORAGE_KEYS } from "../utils/constants";
+import StatusBadge from "../components/StatusBadge";
+import { COLORS, RADIUS, SHADOW, STORAGE_KEYS } from "../utils/constants";
 import { confirmDelete } from "../utils/confirmDelete";
 import { getDateStatus, isValidDate, sortByDate } from "../utils/dateUtils";
 import { formatCurrency, createId } from "../utils/format";
@@ -193,7 +194,7 @@ export default function TasksScreen({ t, language, setLanguage, onProfilePress }
             <View key={item.id} style={[styles.card, ["soon", "today"].includes(status.kind) && styles.alertCard, status.kind === "overdue" && styles.overdueCard]}>
               <Text style={styles.cardTitle}>{item.name}</Text>
               <Text style={styles.cardLine}>{formatCurrency(item.amount)} - {item.dueDate}</Text>
-              <Text style={[styles.status, status.kind === "overdue" && styles.dangerText]}>{status.text}</Text>
+              <StatusBadge text={status.text} kind={status.kind} />
               <View style={styles.actions}>
                 <ActionButton label={t.edit} icon="create-outline" variant="light" onPress={() => startEdit(item)} />
                 <ActionButton label={item.done ? t.markPending : t.markDone} icon="checkmark-outline" variant="success" onPress={() => toggleDone(item)} />
@@ -224,13 +225,11 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 16, paddingBottom: 96, gap: 14 },
   form: { gap: 10 },
-  card: { backgroundColor: COLORS.white, borderRadius: 8, padding: 14, gap: 8, borderWidth: 1, borderColor: COLORS.border },
-  alertCard: { borderColor: "#f59e0b", backgroundColor: "#fffaf0" },
-  overdueCard: { borderColor: COLORS.danger, backgroundColor: "#fff1f2" },
+  card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 16, gap: 10, borderWidth: 1, borderColor: COLORS.border, ...SHADOW.card },
+  alertCard: { borderColor: COLORS.warning, backgroundColor: COLORS.warningLight },
+  overdueCard: { borderColor: COLORS.danger, backgroundColor: COLORS.dangerLight },
   cardTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
   cardLine: { color: COLORS.muted, fontSize: 15 },
-  status: { color: COLORS.primary, fontSize: 14, fontWeight: "900" },
-  dangerText: { color: COLORS.danger },
   actions: { gap: 8 },
   info: { color: COLORS.muted, fontSize: 15, fontWeight: "700" },
   error: { color: COLORS.danger, fontSize: 15, fontWeight: "800" },

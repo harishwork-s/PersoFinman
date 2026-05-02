@@ -7,7 +7,7 @@ import ActionButton from "../components/ActionButton";
 import AppHeader from "../components/AppHeader";
 import FormInput from "../components/FormInput";
 import ProfileOptionItem from "../components/ProfileOptionItem";
-import { COLORS } from "../utils/constants";
+import { COLORS, RADIUS, SHADOW } from "../utils/constants";
 import { clearAppData, loadProfile, saveProfile } from "../utils/storage";
 import { shareMonthlySummary } from "../utils/summary";
 
@@ -68,7 +68,7 @@ export default function ProfileScreen({ t, language, setLanguage, onClose }) {
   }
 
   function showAbout() {
-    Alert.alert(t.aboutPersoFinman, `${t.appName}\n${t.aboutMessage}\n${t.version}`);
+    Alert.alert(t.aboutApp, `${t.appName}\n${t.aboutMessage}\n${t.version}`);
   }
 
   function confirmClearData() {
@@ -132,7 +132,7 @@ export default function ProfileScreen({ t, language, setLanguage, onClose }) {
           <ProfileOptionItem icon="language-outline" title={t.languageOption} value={language === "ta" ? "Tamil" : "English"} onPress={toggleLanguage} />
           <ProfileOptionItem icon="notifications-outline" title={t.notifications} value={notificationsEnabled ? t.enabled : t.disabled} onPress={checkNotifications} />
           <ProfileOptionItem icon="share-social-outline" title={t.shareMonthlySummary} onPress={() => shareMonthlySummary(t)} />
-          <ProfileOptionItem icon="information-circle-outline" title={t.aboutPersoFinman} onPress={showAbout} />
+          <ProfileOptionItem icon="information-circle-outline" title={t.aboutApp} onPress={showAbout} />
           <ProfileOptionItem icon="trash-outline" title={t.clearAllData} danger onPress={confirmClearData} />
         </View>
 
@@ -157,8 +157,8 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 16, paddingBottom: 96, gap: 14 },
   loading: { padding: 16, color: COLORS.muted, fontWeight: "700" },
-  profileCard: { backgroundColor: COLORS.white, borderRadius: 8, borderWidth: 1, borderColor: COLORS.border, padding: 16, gap: 12 },
-  avatar: { width: 76, height: 76, borderRadius: 38, backgroundColor: COLORS.primaryLight, alignItems: "center", justifyContent: "center", alignSelf: "center" },
+  profileCard: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.border, padding: 18, gap: 12, ...SHADOW.card },
+  avatar: { width: 78, height: 78, borderRadius: 39, backgroundColor: COLORS.primaryLight, alignItems: "center", justifyContent: "center", alignSelf: "center", borderWidth: 1, borderColor: COLORS.border },
   name: { color: COLORS.text, fontSize: 22, fontWeight: "900", textAlign: "center" },
   infoRow: { borderTopWidth: 1, borderTopColor: "#eef2f7", paddingTop: 10 },
   infoLabel: { color: COLORS.muted, fontSize: 13, fontWeight: "800" },

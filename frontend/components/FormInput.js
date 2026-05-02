@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, TextInput } from "react-native";
 
-import { COLORS } from "../utils/constants";
+import { COLORS, RADIUS, SHADOW } from "../utils/constants";
 
 export default function FormInput({ label, ...props }) {
   return (
@@ -16,13 +16,15 @@ export default function FormInput({ label, ...props }) {
 
 const styles = StyleSheet.create({
   input: {
-    minHeight: 50,
-    borderRadius: 8,
-    backgroundColor: COLORS.white,
+    minHeight: 52,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: "#d8dee8",
-    paddingHorizontal: 14,
+    borderColor: COLORS.border,
+    paddingHorizontal: 16,
     fontSize: 16,
     color: COLORS.text,
+    ...SHADOW.soft,
+    elevation: 1,
   },
 });

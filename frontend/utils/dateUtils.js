@@ -31,6 +31,12 @@ export function toDateInput(date) {
   return `${year}-${month}-${day}`;
 }
 
+export function addDaysToDate(days, baseDate = new Date()) {
+  const next = normalizeDate(baseDate);
+  next.setDate(next.getDate() + days);
+  return toDateInput(next);
+}
+
 export function daysUntil(value) {
   const parsed = parseLocalDate(value);
   if (!parsed) return null;

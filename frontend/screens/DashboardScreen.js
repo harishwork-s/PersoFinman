@@ -4,7 +4,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 
 import AppHeader from "../components/AppHeader";
-import { COLORS } from "../utils/constants";
+import { COLORS, RADIUS, SHADOW } from "../utils/constants";
 import {
   getDateStatus,
   getWarrantyStatus,
@@ -186,8 +186,9 @@ const styles = StyleSheet.create({
   },
   summary: {
     backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    padding: 18,
+    borderRadius: RADIUS.lg,
+    padding: 20,
+    ...SHADOW.card,
   },
   summaryLabel: {
     color: "#dff6ff",
@@ -207,12 +208,13 @@ const styles = StyleSheet.create({
   miniCard: {
     flex: 1,
     minHeight: 92,
-    backgroundColor: COLORS.white,
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
     justifyContent: "space-between",
+    ...SHADOW.soft,
   },
   miniValue: {
     color: COLORS.text,
@@ -225,12 +227,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   section: {
-    backgroundColor: COLORS.white,
-    borderRadius: 8,
-    padding: 14,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.lg,
+    padding: 16,
     gap: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
+    ...SHADOW.card,
   },
   sectionTitle: {
     flexDirection: "row",
@@ -267,15 +270,15 @@ const styles = StyleSheet.create({
   },
   badge: {
     color: COLORS.warning,
-    backgroundColor: COLORS.warningBg,
+    backgroundColor: COLORS.warningLight,
     paddingHorizontal: 8,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: RADIUS.pill,
     fontWeight: "800",
   },
   dangerBadge: {
     color: COLORS.danger,
-    backgroundColor: "#fff1f2",
+    backgroundColor: COLORS.dangerLight,
   },
   info: {
     color: COLORS.muted,

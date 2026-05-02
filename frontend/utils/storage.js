@@ -1,10 +1,18 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { DEFAULT_PROFILE, STORAGE_KEYS } from "./constants";
+import { getDemoDataForKey } from "./demoData";
 
 export async function loadCollection(key) {
   const raw = await AsyncStorage.getItem(key);
-  return raw ? JSON.parse(raw) : [];
+  const items = raw ? JSON.parse(raw) : [];
+  if (items.length > 0) return items;
+
+  const demoItems = getDemoDataForKey(key);
+  if (!demoItems.length) return items;
+
+  await AsyncStorage.setItem(key, JSON.stringify(demoItems));
+  return demoItems;
 }
 
 export async function saveCollection(key, items) {

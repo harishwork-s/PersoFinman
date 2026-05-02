@@ -1,7 +1,7 @@
 import React from "react";
 import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
 
-import { COLORS } from "../utils/constants";
+import { COLORS, RADIUS } from "../utils/constants";
 
 export default function FilterChips({ filters, activeFilter, onChange }) {
   return (
@@ -29,11 +29,11 @@ const styles = StyleSheet.create({
   },
   chip: {
     minHeight: 40,
-    borderRadius: 8,
-    paddingHorizontal: 12,
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.white,
+    backgroundColor: COLORS.neutral,
     borderWidth: 1,
     borderColor: COLORS.border,
   },

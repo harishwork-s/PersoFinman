@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import LanguageToggle from "./LanguageToggle";
-import { COLORS } from "../utils/constants";
+import { COLORS, RADIUS, SHADOW } from "../utils/constants";
 
 
 export default function AppHeader({ title, t, language, setLanguage, onProfilePress, showProfileButton = true }) {
@@ -32,16 +32,17 @@ export default function AppHeader({ title, t, language, setLanguage, onProfilePr
 
 const styles = StyleSheet.create({
   header: {
-    paddingTop: 54,
+    paddingTop: 52,
     paddingHorizontal: 18,
-    paddingBottom: 14,
-    backgroundColor: COLORS.white,
+    paddingBottom: 16,
+    backgroundColor: COLORS.surface,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     gap: 10,
+    ...SHADOW.soft,
   },
   titleBlock: {
     flex: 1,
@@ -49,11 +50,12 @@ const styles = StyleSheet.create({
   appName: {
     color: COLORS.muted,
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "800",
+    letterSpacing: 0.4,
   },
   title: {
     color: COLORS.text,
-    fontSize: 24,
+    fontSize: 25,
     fontWeight: "900",
     marginTop: 2,
   },
@@ -63,9 +65,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   profileButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
+    width: 42,
+    height: 42,
+    borderRadius: RADIUS.pill,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center",
     justifyContent: "center",

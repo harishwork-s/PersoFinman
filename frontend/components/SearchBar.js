@@ -2,7 +2,7 @@ import React from "react";
 import { StyleSheet, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { COLORS } from "../utils/constants";
+import { COLORS, RADIUS, SHADOW } from "../utils/constants";
 
 export default function SearchBar({ value, onChangeText, placeholder }) {
   return (
@@ -22,15 +22,16 @@ export default function SearchBar({ value, onChangeText, placeholder }) {
 
 const styles = StyleSheet.create({
   wrap: {
-    minHeight: 48,
-    borderRadius: 8,
-    backgroundColor: COLORS.white,
+    minHeight: 50,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
     paddingHorizontal: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+    ...SHADOW.soft,
   },
   input: {
     flex: 1,

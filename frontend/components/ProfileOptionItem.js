@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-import { COLORS } from "../utils/constants";
+import { COLORS, RADIUS, SHADOW } from "../utils/constants";
 
 export default function ProfileOptionItem({ icon, title, value, onPress, danger = false }) {
   return (
@@ -22,25 +22,26 @@ export default function ProfileOptionItem({ icon, title, value, onPress, danger 
 const styles = StyleSheet.create({
   item: {
     minHeight: 64,
-    backgroundColor: COLORS.white,
-    borderRadius: 8,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,
     padding: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    ...SHADOW.soft,
   },
   iconBox: {
     width: 40,
     height: 40,
-    borderRadius: 8,
+    borderRadius: RADIUS.md,
     backgroundColor: COLORS.primaryLight,
     alignItems: "center",
     justifyContent: "center",
   },
   dangerIconBox: {
-    backgroundColor: "#fff1f2",
+    backgroundColor: COLORS.dangerLight,
   },
   copy: {
     flex: 1,

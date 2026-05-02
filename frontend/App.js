@@ -13,7 +13,7 @@ import ProfileScreen from "./screens/ProfileScreen";
 import { loadLanguage, saveLanguage } from "./utils/storage";
 import { setupNotificationHandler, requestNotificationPermission } from "./utils/notifications";
 import { translations } from "./utils/translations";
-import { COLORS } from "./utils/constants";
+import { COLORS, SHADOW } from "./utils/constants";
 
 const Tab = createBottomTabNavigator();
 
@@ -64,8 +64,16 @@ export default function App() {
             headerShown: false,
             tabBarActiveTintColor: COLORS.primary,
             tabBarInactiveTintColor: "#6b7280",
-            tabBarStyle: { height: 64, paddingBottom: 8, paddingTop: 8 },
-            tabBarLabelStyle: { fontSize: 12, fontWeight: "700" },
+            tabBarStyle: {
+              height: 68,
+              paddingBottom: 9,
+              paddingTop: 8,
+              backgroundColor: COLORS.surface,
+              borderTopWidth: 1,
+              borderTopColor: COLORS.border,
+              ...SHADOW.soft,
+            },
+            tabBarLabelStyle: { fontSize: 12, fontWeight: "800" },
             tabBarIcon: ({ color, size }) => tabIcon(route.name, color, size),
           })}
         >

@@ -20,7 +20,8 @@ import AppHeader from "../components/AppHeader";
 import FilterChips from "../components/FilterChips";
 import FormInput from "../components/FormInput";
 import SearchBar from "../components/SearchBar";
-import { COLORS, STORAGE_KEYS } from "../utils/constants";
+import StatusBadge from "../components/StatusBadge";
+import { COLORS, RADIUS, SHADOW, STORAGE_KEYS } from "../utils/constants";
 import { confirmDelete } from "../utils/confirmDelete";
 import { calculateExpiryDate, getWarrantyStatus, isValidDate, sortByDate } from "../utils/dateUtils";
 import { createId } from "../utils/format";
@@ -240,7 +241,7 @@ export default function WarrantyScreen({ t, language, setLanguage, onProfilePres
                 <View style={styles.cardCopy}>
                   <Text style={styles.cardTitle}>{item.name}</Text>
                   <Text style={styles.cardLine}>{t.expiresOn}: {status.expiryDate}</Text>
-                  <Text style={[styles.status, status.kind === "expired" && styles.dangerText]}>{status.text}</Text>
+                  <StatusBadge text={status.text} kind={status.kind} />
                 </View>
                 {item.invoiceUri ? (
                   <Image source={{ uri: item.invoiceUri }} style={styles.thumbnail} />
@@ -296,17 +297,15 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 16, paddingBottom: 96, gap: 14 },
   form: { gap: 10 },
-  card: { backgroundColor: COLORS.white, borderRadius: 8, padding: 14, gap: 10, borderWidth: 1, borderColor: COLORS.border },
-  alertCard: { borderColor: "#f59e0b", backgroundColor: "#fffaf0" },
-  overdueCard: { borderColor: COLORS.danger, backgroundColor: "#fff1f2" },
+  card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 16, gap: 12, borderWidth: 1, borderColor: COLORS.border, ...SHADOW.card },
+  alertCard: { borderColor: COLORS.warning, backgroundColor: COLORS.warningLight },
+  overdueCard: { borderColor: COLORS.danger, backgroundColor: COLORS.dangerLight },
   cardTop: { flexDirection: "row", gap: 12, alignItems: "center" },
   cardCopy: { flex: 1 },
   cardTitle: { color: COLORS.text, fontSize: 18, fontWeight: "900" },
   cardLine: { color: COLORS.muted, fontSize: 15, marginTop: 4 },
-  status: { color: COLORS.primary, fontSize: 14, fontWeight: "900", marginTop: 4 },
-  dangerText: { color: COLORS.danger },
-  thumbnail: { width: 72, height: 72, borderRadius: 8, backgroundColor: "#e5e7eb" },
-  emptyThumb: { width: 72, height: 72, borderRadius: 8, backgroundColor: "#eef2f7", alignItems: "center", justifyContent: "center" },
+  thumbnail: { width: 74, height: 74, borderRadius: RADIUS.md, backgroundColor: COLORS.neutral },
+  emptyThumb: { width: 74, height: 74, borderRadius: RADIUS.md, backgroundColor: COLORS.neutral, alignItems: "center", justifyContent: "center" },
   actions: { gap: 8 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.92)", alignItems: "center", justifyContent: "center", padding: 18 },
   closeButton: { position: "absolute", top: 48, right: 18, width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.16)", zIndex: 1 },

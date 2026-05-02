@@ -1,4 +1,4 @@
-import { APP_NAME } from "./constants";
+import { APP_NAME, TAMIL_APP_NAME } from "./constants";
 
 export const translations = {
   en: {
@@ -86,7 +86,7 @@ export const translations = {
     enabled: "Enabled",
     disabled: "Disabled",
     shareMonthlySummary: "Share Monthly Summary",
-    aboutPersoFinman: "About PersoFinman",
+    aboutApp: "About Ninaivu Selvam",
     clearAllData: "Clear All Data",
     logOut: "Log Out",
     deleteItemTitle: "Delete item?",
@@ -102,16 +102,16 @@ export const translations = {
     searchAutopay: "Search subscriptions...",
     searchWarranty: "Search warranty items...",
     searchTasks: "Search tasks...",
-    aboutMessage: "Personal financial control for bills, subscriptions, tasks, and warranties.",
+    aboutMessage: "Premium personal financial control for bills, subscriptions, tasks, and warranties.",
     version: "Version 1.0.0",
     logoutMessage: "Logout action is not connected to authentication yet.",
     clearDataTitle: "Clear all data?",
     clearDataMessage: "Bills, autopay, tasks, warranty, and profile data will be removed.",
     dataCleared: "All data cleared.",
-    shareNoData: "PersoFinman Monthly Summary - No pending records for this month.",
+    shareNoData: "Ninaivu Selvam Monthly Summary - No pending records for this month.",
   },
   ta: {
-    appName: APP_NAME,
+    appName: TAMIL_APP_NAME,
     dashboard: "முகப்பு",
     autopay: "ஆட்டோ பே",
     bills: "பில்",
@@ -195,7 +195,7 @@ export const translations = {
     enabled: "இயக்கப்பட்டது",
     disabled: "முடக்கப்பட்டது",
     shareMonthlySummary: "மாத சுருக்கத்தை பகிர்",
-    aboutPersoFinman: "PersoFinman பற்றி",
+    aboutApp: "நினைவு செல்வம் பற்றி",
     clearAllData: "அனைத்து தரவையும் அழி",
     logOut: "வெளியேறு",
     deleteItemTitle: "இந்த பதிவை நீக்கவா?",
@@ -211,12 +211,12 @@ export const translations = {
     searchAutopay: "ஆட்டோ பே பதிவுகளை தேடுங்கள்...",
     searchWarranty: "வாரண்டி பதிவுகளை தேடுங்கள்...",
     searchTasks: "வேலைகளை தேடுங்கள்...",
-    aboutMessage: "பில்கள், சந்தாக்கள், வேலைகள், வாரண்டிகளை நிர்வகிக்கும் தனிப்பட்ட நிதி கட்டுப்பாடு.",
+    aboutMessage: "பில்கள், சந்தாக்கள், வேலைகள், வாரண்டிகளை நிர்வகிக்கும் நவீன தனிப்பட்ட நிதி கட்டுப்பாடு.",
     version: "பதிப்பு 1.0.0",
     logoutMessage: "வெளியேறும் செயல் இன்னும் authentication உடன் இணைக்கப்படவில்லை.",
     clearDataTitle: "அனைத்து தரவையும் அழிக்கவா?",
     clearDataMessage: "பில்கள், ஆட்டோ பே, வேலைகள், வாரண்டி, சுயவிவர தரவு நீக்கப்படும்.",
     dataCleared: "அனைத்து தரவும் அழிக்கப்பட்டது.",
-    shareNoData: "PersoFinman மாத சுருக்கம் - இந்த மாதத்திற்கு நிலுவை பதிவுகள் இல்லை.",
+    shareNoData: "நினைவு செல்வம் மாத சுருக்கம் - இந்த மாதத்திற்கு நிலுவை பதிவுகள் இல்லை.",
   },
 };

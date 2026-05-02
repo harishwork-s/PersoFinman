@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "PersoFinman",
-    "slug": "persofinman",
+    "name": "Ninaivu Selvam",
+    "slug": "ninaivu-selvam",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#f7f9fc"
+      "backgroundColor": "#F6F7F9"
     },
     "assetBundlePatterns": [
       "**/*"
