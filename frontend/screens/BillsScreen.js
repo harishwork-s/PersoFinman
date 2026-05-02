@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import ActionButton from "../components/ActionButton";
 import AppHeader from "../components/AppHeader";
 import FilterChips from "../components/FilterChips";
+import FormModal from "../components/FormModal";
 import FormInput from "../components/FormInput";
 import SearchBar from "../components/SearchBar";
 import StatusBadge from "../components/StatusBadge";
@@ -24,6 +25,7 @@ export default function BillsScreen({ t, language, setLanguage, onProfilePress }
   const [editId, setEditId] = useState(null);
   const [filter, setFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [formVisible, setFormVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -105,6 +107,7 @@ export default function BillsScreen({ t, language, setLanguage, onProfilePress }
         await saveItems([...items, item]);
       }
       clearForm();
+      setFormVisible(false);
     } catch (err) {
       setError(t.storageError);
     } finally {
@@ -115,11 +118,22 @@ export default function BillsScreen({ t, language, setLanguage, onProfilePress }
   function startEdit(item) {
     setEditId(item.id);
     setForm({ name: item.name, amount: String(item.amount), dueDate: item.dueDate });
+    setFormVisible(true);
   }
 
   function clearForm() {
     setEditId(null);
     setForm(blankForm);
+  }
+
+  function openAddForm() {
+    clearForm();
+    setFormVisible(true);
+  }
+
+  function closeForm() {
+    clearForm();
+    setFormVisible(false);
   }
 
   async function togglePaid(item) {
@@ -184,14 +198,8 @@ export default function BillsScreen({ t, language, setLanguage, onProfilePress }
       <AppHeader title={t.bills} t={t} language={language} setLanguage={setLanguage} onProfilePress={onProfilePress} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder={t.searchBills} />
-        <View style={styles.form}>
-          <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
-          <FormInput label={t.amount} value={form.amount} keyboardType="numeric" onChangeText={(value) => updateForm("amount", value)} />
-          <FormInput label={`${t.dueDate} (YYYY-MM-DD)`} value={form.dueDate} onChangeText={(value) => updateForm("dueDate", value)} />
-          <ActionButton label={editId ? t.update : t.add} icon={editId ? "save-outline" : "add-outline"} onPress={addOrUpdateItem} disabled={loading} />
-          {editId ? <ActionButton label={t.cancel} icon="close-outline" variant="light" onPress={clearForm} /> : null}
-        </View>
         <FilterChips filters={filters} activeFilter={filter} onChange={setFilter} />
+        <ActionButton label={t.addBill} icon="add-outline" onPress={openAddForm} />
         {loading ? <Text style={styles.info}>{t.loading}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {!loading && !visibleItems.length ? <Text style={styles.info}>{emptyMessage}</Text> : null}
@@ -211,6 +219,18 @@ export default function BillsScreen({ t, language, setLanguage, onProfilePress }
           );
         })}
       </ScrollView>
+      <FormModal
+        visible={formVisible}
+        title={editId ? t.update : t.addBill}
+        closeLabel={t.close}
+        onClose={closeForm}
+      >
+        <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
+        <FormInput label={t.amount} value={form.amount} keyboardType="numeric" onChangeText={(value) => updateForm("amount", value)} />
+        <FormInput label={`${t.dueDate} (YYYY-MM-DD)`} value={form.dueDate} onChangeText={(value) => updateForm("dueDate", value)} />
+        <ActionButton label={editId ? t.update : t.add} icon={editId ? "save-outline" : "add-outline"} onPress={addOrUpdateItem} disabled={loading} />
+        <ActionButton label={t.cancel} icon="close-outline" variant="neutral" onPress={closeForm} />
+      </FormModal>
     </KeyboardAvoidingView>
   );
 }

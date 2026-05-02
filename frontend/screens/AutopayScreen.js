@@ -5,6 +5,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import ActionButton from "../components/ActionButton";
 import AppHeader from "../components/AppHeader";
 import FilterChips from "../components/FilterChips";
+import FormModal from "../components/FormModal";
 import FormInput from "../components/FormInput";
 import SearchBar from "../components/SearchBar";
 import StatusBadge from "../components/StatusBadge";
@@ -24,6 +25,7 @@ export default function AutopayScreen({ t, language, setLanguage, onProfilePress
   const [editId, setEditId] = useState(null);
   const [filter, setFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [formVisible, setFormVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -113,6 +115,7 @@ export default function AutopayScreen({ t, language, setLanguage, onProfilePress
         await saveItems([...items, item]);
       }
       clearForm();
+      setFormVisible(false);
     } catch (err) {
       setError(t.storageError);
     } finally {
@@ -129,11 +132,22 @@ export default function AutopayScreen({ t, language, setLanguage, onProfilePress
       paymentLink: item.paymentLink || "",
       frequency: item.frequency || "Monthly",
     });
+    setFormVisible(true);
   }
 
   function clearForm() {
     setEditId(null);
     setForm(blankForm);
+  }
+
+  function openAddForm() {
+    clearForm();
+    setFormVisible(true);
+  }
+
+  function closeForm() {
+    clearForm();
+    setFormVisible(false);
   }
 
   async function handlePaid(item) {
@@ -210,26 +224,12 @@ export default function AutopayScreen({ t, language, setLanguage, onProfilePress
       <AppHeader title={t.autopay} t={t} language={language} setLanguage={setLanguage} onProfilePress={onProfilePress} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder={t.searchAutopay} />
+        <FilterChips filters={filters} activeFilter={filter} onChange={setFilter} />
+        <ActionButton label={t.addSubscription} icon="add-outline" onPress={openAddForm} />
         <View style={styles.totalBox}>
           <Text style={styles.totalLabel}>{t.autopay}</Text>
           <Text style={styles.totalAmount}>{formatCurrency(total)}</Text>
         </View>
-        <View style={styles.form}>
-          <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
-          <FormInput label={t.amount} value={form.amount} keyboardType="numeric" onChangeText={(value) => updateForm("amount", value)} />
-          <FormInput label={`${t.date} (YYYY-MM-DD)`} value={form.date} onChangeText={(value) => updateForm("date", value)} />
-          <FormInput label={t.paymentLink} value={form.paymentLink} onChangeText={(value) => updateForm("paymentLink", value)} />
-          <View style={styles.frequencyWrap}>
-            {FREQUENCIES.map((frequency) => (
-              <Pressable key={frequency} style={[styles.frequencyChip, form.frequency === frequency && styles.frequencyActive]} onPress={() => updateForm("frequency", frequency)}>
-                <Text style={[styles.frequencyText, form.frequency === frequency && styles.frequencyActiveText]}>{frequency}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <ActionButton label={editId ? t.update : t.add} icon={editId ? "save-outline" : "add-outline"} onPress={addOrUpdateItem} disabled={loading} />
-          {editId ? <ActionButton label={t.cancel} icon="close-outline" variant="light" onPress={clearForm} /> : null}
-        </View>
-        <FilterChips filters={filters} activeFilter={filter} onChange={setFilter} />
         {loading ? <Text style={styles.info}>{t.loading}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {!loading && !visibleItems.length ? <Text style={styles.info}>{emptyMessage}</Text> : null}
@@ -252,6 +252,26 @@ export default function AutopayScreen({ t, language, setLanguage, onProfilePress
           );
         })}
       </ScrollView>
+      <FormModal
+        visible={formVisible}
+        title={editId ? t.update : t.addSubscription}
+        closeLabel={t.close}
+        onClose={closeForm}
+      >
+        <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
+        <FormInput label={t.amount} value={form.amount} keyboardType="numeric" onChangeText={(value) => updateForm("amount", value)} />
+        <FormInput label={`${t.date} (YYYY-MM-DD)`} value={form.date} onChangeText={(value) => updateForm("date", value)} />
+        <FormInput label={t.paymentLink} value={form.paymentLink} onChangeText={(value) => updateForm("paymentLink", value)} />
+        <View style={styles.frequencyWrap}>
+          {FREQUENCIES.map((frequency) => (
+            <Pressable key={frequency} style={[styles.frequencyChip, form.frequency === frequency && styles.frequencyActive]} onPress={() => updateForm("frequency", frequency)}>
+              <Text style={[styles.frequencyText, form.frequency === frequency && styles.frequencyActiveText]}>{frequency}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <ActionButton label={editId ? t.update : t.add} icon={editId ? "save-outline" : "add-outline"} onPress={addOrUpdateItem} disabled={loading} />
+        <ActionButton label={t.cancel} icon="close-outline" variant="neutral" onPress={closeForm} />
+      </FormModal>
     </KeyboardAvoidingView>
   );
 }

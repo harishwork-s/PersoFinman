@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import ActionButton from "../components/ActionButton";
 import AppHeader from "../components/AppHeader";
 import FilterChips from "../components/FilterChips";
+import FormModal from "../components/FormModal";
 import FormInput from "../components/FormInput";
 import SearchBar from "../components/SearchBar";
 import StatusBadge from "../components/StatusBadge";
@@ -39,6 +40,7 @@ export default function WarrantyScreen({ t, language, setLanguage, onProfilePres
   const [invoiceAsset, setInvoiceAsset] = useState(null);
   const [filter, setFilter] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+  const [formVisible, setFormVisible] = useState(false);
   const [previewUri, setPreviewUri] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -151,6 +153,7 @@ export default function WarrantyScreen({ t, language, setLanguage, onProfilePres
         await saveItems([...items, item]);
       }
       clearForm();
+      setFormVisible(false);
     } catch (err) {
       setError(t.storageError);
     } finally {
@@ -166,12 +169,23 @@ export default function WarrantyScreen({ t, language, setLanguage, onProfilePres
       purchaseDate: item.purchaseDate,
       warrantyMonths: String(item.warrantyMonths),
     });
+    setFormVisible(true);
   }
 
   function clearForm() {
     setEditId(null);
     setInvoiceAsset(null);
     setForm(blankForm);
+  }
+
+  function openAddForm() {
+    clearForm();
+    setFormVisible(true);
+  }
+
+  function closeForm() {
+    clearForm();
+    setFormVisible(false);
   }
 
   async function deleteItem(item) {
@@ -218,16 +232,8 @@ export default function WarrantyScreen({ t, language, setLanguage, onProfilePres
       <AppHeader title={t.warranty} t={t} language={language} setLanguage={setLanguage} onProfilePress={onProfilePress} />
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder={t.searchWarranty} />
-        <View style={styles.form}>
-          <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
-          <FormInput label={`${t.purchaseDate} (YYYY-MM-DD)`} value={form.purchaseDate} onChangeText={(value) => updateForm("purchaseDate", value)} />
-          <FormInput label={t.warrantyMonths} value={form.warrantyMonths} keyboardType="numeric" onChangeText={(value) => updateForm("warrantyMonths", value)} />
-          <ActionButton label={invoiceAsset ? t.invoiceSelected : t.chooseInvoice} icon="image-outline" variant="light" onPress={chooseInvoice} />
-          <ActionButton label={editId ? t.update : t.add} icon={editId ? "save-outline" : "add-outline"} onPress={addOrUpdateItem} disabled={loading} />
-          {editId ? <ActionButton label={t.cancel} icon="close-outline" variant="light" onPress={clearForm} /> : null}
-        </View>
-
         <FilterChips filters={filters} activeFilter={filter} onChange={setFilter} />
+        <ActionButton label={t.addWarranty} icon="add-outline" onPress={openAddForm} />
 
         {loading ? <Text style={styles.info}>{t.loading}</Text> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -273,6 +279,19 @@ export default function WarrantyScreen({ t, language, setLanguage, onProfilePres
           {previewUri ? <Image source={{ uri: previewUri }} style={styles.previewImage} resizeMode="contain" /> : null}
         </View>
       </Modal>
+      <FormModal
+        visible={formVisible}
+        title={editId ? t.update : t.addWarranty}
+        closeLabel={t.close}
+        onClose={closeForm}
+      >
+        <FormInput label={t.name} value={form.name} onChangeText={(value) => updateForm("name", value)} />
+        <FormInput label={`${t.purchaseDate} (YYYY-MM-DD)`} value={form.purchaseDate} onChangeText={(value) => updateForm("purchaseDate", value)} />
+        <FormInput label={t.warrantyMonths} value={form.warrantyMonths} keyboardType="numeric" onChangeText={(value) => updateForm("warrantyMonths", value)} />
+        <ActionButton label={invoiceAsset ? t.invoiceSelected : t.chooseInvoice} icon="image-outline" variant="light" onPress={chooseInvoice} />
+        <ActionButton label={editId ? t.update : t.add} icon={editId ? "save-outline" : "add-outline"} onPress={addOrUpdateItem} disabled={loading} />
+        <ActionButton label={t.cancel} icon="close-outline" variant="neutral" onPress={closeForm} />
+      </FormModal>
     </KeyboardAvoidingView>
   );
 }
